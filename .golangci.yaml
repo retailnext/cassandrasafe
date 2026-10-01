@@ -1,0 +1,162 @@
+---
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - depguard
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - funcorder
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - gocritic
+    - godot
+    - goheader
+    - gosec
+    - govet
+    - iface
+    - ineffassign
+    - intrange
+    - ireturn
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nonamedreturns
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - predeclared
+    - reassign
+    - recvcheck
+    - revive
+    - sloglint
+    - staticcheck
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - wrapcheck
+  settings:
+    depguard:
+      rules:
+        driver:
+          files:
+            - "!**/cassandra/**"
+          deny:
+            - pkg: github.com/apache/cassandra-gocql-driver
+              desc: "Only package cassandra may import the driver."
+        kong:
+          files:
+            - "!${base-path}/main.go"
+          deny:
+            - pkg: github.com/alecthomas/kong
+              desc: "Only main.go may import Kong."
+        node:
+          files:
+            - "**/node/**"
+          allow:
+            - $gostd
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: "^context\\.TODO$"
+          msg: "Do not use context.TODO. Derive a context from an existing one, or use signal.NotifyContext in main."
+        - pattern: "^log\\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$"
+          msg: "Use the injected *slog.Logger, not the log package."
+        - pattern: "^http\\.(Get|Head|Post|PostForm)$"
+          msg: "Use an injected *http.Client with an explicit timeout."
+        - pattern: "^os\\.(Getenv|LookupEnv|Setenv)$"
+          msg: "Read configuration in main.go and inject the values."
+        - pattern: "^slog\\.(New|NewTextHandler|NewJSONHandler)$"
+          msg: "Build loggers in main.go, or on t.Output() in tests. Inject *slog.Logger everywhere else."
+        - pattern: "^slog\\.(Default|SetDefault)$"
+          msg: "Do not use a global logger."
+        - pattern: "^slog\\.DiscardHandler$"
+          msg: "Do not discard logs. Tests write logs to t.Output()."
+        - pattern: "^io\\.Discard$"
+          msg: "Do not discard output. Tests write to t.Output()."
+        - pattern: "^os\\.(Stderr|Stdout|Stdin)$"
+          msg: "Only main.go uses the process streams. Tests use t.Output()."
+    goheader:
+      template: |-
+        Copyright {{MOD-YEAR}} RetailNext, Inc.
+
+        Licensed under the Apache License, Version 2.0 (the "License");
+        you may not use this file except in compliance with the License.
+        You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+    ireturn:
+      allow:
+        - error
+        - stdlib
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    sloglint:
+      context: "scope"
+      key-naming-case: "snake"
+      msg-style: "lowercased"
+      no-global: "all"
+      no-mixed-args: true
+      no-raw-keys: true
+      static-msg: true
+  exclusions:
+    rules:
+      - path: "^main\\.go$"
+        linters:
+          - forbidigo
+        text: "Read configuration in main.go"
+      - path: "^main\\.go$"
+        linters:
+          - forbidigo
+        text: "Only main.go uses the process streams"
+      - path: "^main\\.go$"
+        linters:
+          - forbidigo
+        text: "Build loggers in main.go"
+      - path: "_test\\.go$"
+        linters:
+          - forbidigo
+        text: "Build loggers in main.go"
+      - path: "^main_integration_test\\.go$"
+        linters:
+          - forbidigo
+        text: "Read configuration in main.go"
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default

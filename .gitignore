@@ -1,0 +1,12 @@
+# Build output
+/cassandrasafe
+/image/
+
+# Test output
+coverage.out
+
+# IDE files. Shared copyright settings stay tracked.
+.idea/*
+!.idea/copyright/
+.vscode/*
+!.vscode/settings.json

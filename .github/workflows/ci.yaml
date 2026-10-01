@@ -1,0 +1,221 @@
+---
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+permissions:
+  contents: read
+env:
+  # renovate: datasource=github-releases depName=golangci/golangci-lint versioning=semver-coerced
+  GOLANGCI_LINT_VERSION: "v2.14.0"
+  # renovate: datasource=github-releases depName=ko-build/ko versioning=semver-coerced
+  KO_VERSION: "v0.19.1"
+  # renovate: datasource=github-releases depName=regclient/regclient versioning=semver-coerced
+  REGCTL_VERSION: "v0.11.6"
+  KO_DOCKER_REPO: ghcr.io/retailnext/cassandrasafe
+  IMAGE_SOURCE: https://github.com/retailnext/cassandrasafe
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run the prek hooks
+        uses: j178/prek-action@4e14d07f9231acabce116ccfca13b13dd9755ece # v3.0.0
+        env:
+          SKIP: golangci-lint-full
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # goheader checks the copyright year against the git history.
+      - name: Start a Cassandra node for the integration test
+        run: docker compose -f e2e/compose.cassandra-5.yaml up -d node1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+      - name: Wait for the Cassandra node
+        run: |
+          for _ in $(seq 1 60); do
+            if docker exec cassandrasafe-e2e-node1 cqlsh -e 'describe cluster' >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::the Cassandra node did not answer in time"
+          docker logs cassandrasafe-e2e-node1
+          exit 1
+      - name: Run the tests
+        env:
+          CASSANDRASAFE_TEST_HOST: 127.0.0.1
+        run: go test -race -coverprofile=coverage.out -coverpkg=./... ./...
+      - name: Check the coverage threshold
+        run: |
+          go tool cover -func=coverage.out | awk '
+            /^total:/ {
+              sub("%", "", $3)
+              printf "total coverage: %s%%\n", $3
+              if ($3 + 0 < 90) {
+                printf "::error::coverage %s%% is below the 90%% threshold\n", $3
+                exit 1
+              }
+            }'
+      - name: Set up ko
+        uses: ko-build/setup-ko@61b4d1d396f5b2e7d6bb6fefdce3dc38d1a13445 # v0.10
+        with:
+          version: ${{ env.KO_VERSION }}
+      - name: Install regctl
+        uses: regclient/actions/regctl-installer@1b705e32d40851370799ea5814e83d0a5f6a70dc # v0.1.0
+        with:
+          release: ${{ env.REGCTL_VERSION }}
+      - name: Build the image
+        run: |
+          REF=$(ko build --bare --push=false --oci-layout-path=image \
+            --image-label "org.opencontainers.image.source=${IMAGE_SOURCE}" .)
+          regctl image copy "ocidir://${REF}" ocidir://image:ci
+      - name: Check that the image runs
+        run: |
+          regctl image export --platform local --name cassandrasafe:ci ocidir://image:ci | docker load
+          docker run --rm cassandrasafe:ci --help
+          docker run --rm cassandrasafe:ci --version
+      - name: Upload the image artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image
+          path: image
+          if-no-files-found: error
+      - name: Stop the Cassandra node
+        if: always()
+        run: docker compose -f e2e/compose.cassandra-5.yaml down -v
+  e2e:
+    name: Smoke test (Cassandra ${{ matrix.cassandra }})
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cassandra:
+          - "3"
+          - "4"
+          - "5"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download the image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image
+          path: image
+      - name: Install regctl
+        uses: regclient/actions/regctl-installer@1b705e32d40851370799ea5814e83d0a5f6a70dc # v0.1.0
+        with:
+          release: ${{ env.REGCTL_VERSION }}
+      - name: Load the image
+        run: regctl image export --platform local --name cassandrasafe:ci ocidir://image:ci | docker load
+      - name: Run the smoke test
+        env:
+          CASSANDRA_MAJOR: ${{ matrix.cassandra }}
+        run: e2e/smoke.sh cassandrasafe:ci "e2e/compose.cassandra-${CASSANDRA_MAJOR}.yaml"
+  e2e-ok:
+    name: Smoke tests
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check that every smoke test passed
+        env:
+          RESULT: ${{ needs.e2e.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::smoke test result is ${RESULT}"
+            exit 1
+          fi
+  publish:
+    name: Publish the image
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - lint
+      - go
+      - e2e-ok
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the GitHub Release
+      packages: write
+    steps:
+      - name: Check out the repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check that the tag points at a commit on main
+        run: git merge-base --is-ancestor "${GITHUB_REF_NAME}^{commit}" origin/main
+      - name: Download the image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image
+          path: image
+      - name: Install regctl
+        uses: regclient/actions/regctl-installer@1b705e32d40851370799ea5814e83d0a5f6a70dc # v0.1.0
+        with:
+          release: ${{ env.REGCTL_VERSION }}
+      - name: Log in to ghcr.io
+        uses: regclient/actions/regctl-login@1b705e32d40851370799ea5814e83d0a5f6a70dc # v0.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Check that the tag is not published yet
+        run: |
+          set +e
+          output=$(regctl manifest head "${KO_DOCKER_REPO}:${GITHUB_REF_NAME}" 2>&1)
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "::error::${KO_DOCKER_REPO}:${GITHUB_REF_NAME} exists. Tags are immutable."
+            exit 1
+          fi
+          case "$output" in
+            *"[http 404]"* | *unauthorized* | *denied*)
+              echo "${KO_DOCKER_REPO}:${GITHUB_REF_NAME} is free"
+              ;;
+            *)
+              echo "::error::could not check the tag: ${output}"
+              exit 1
+              ;;
+          esac
+      - name: Publish the image
+        run: regctl image copy ocidir://image:ci "${KO_DOCKER_REPO}:${GITHUB_REF_NAME}"
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat >notes.md <<EOF
+          ## Image
+
+          \`${KO_DOCKER_REPO}:${GITHUB_REF_NAME}\` for \`linux/amd64\` and \`linux/arm64\`.
+
+          Run it as a sidecar of a Cassandra container:
+
+          \`\`\`bash
+          docker run --rm --network container:cassandra ${KO_DOCKER_REPO}:${GITHUB_REF_NAME}
+          \`\`\`
+
+          EOF
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --notes-file notes.md

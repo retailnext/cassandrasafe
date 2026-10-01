@@ -1,0 +1,63 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Keep the digest of the ko base image current.",
+      "managerFilePatterns": [
+        "/(^|/)\\.ko\\.yaml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+defaultBaseImage:\\s*\\S+?:(?<currentValue>[^@\\s/:]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Keep the release version in the README examples current.",
+      "managerFilePatterns": [
+        "/(^|/)README\\.md$/"
+      ],
+      "matchStrings": [
+        "<!-- renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) -->\\n```bash\\n[^\\n]*ghcr\\.io/retailnext/cassandrasafe:(?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ]
+    }
+  ],
+  "extends": [
+    "config:best-practices",
+    "customManagers:githubActionsVersions",
+    "schedule:monthly",
+    "group:all"
+  ],
+  "packageRules": [
+    {
+      "description": "Each e2e compose file follows one Cassandra major. A new major is a new file.",
+      "enabled": false,
+      "matchDepNames": [
+        "cassandra"
+      ],
+      "matchFileNames": [
+        "e2e/**"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ]
+    },
+    {
+      "automerge": true,
+      "description": "A new release updates the README at once and merges itself.",
+      "groupName": "README release version",
+      "matchDepNames": [
+        "retailnext/cassandrasafe"
+      ],
+      "schedule": [
+        "at any time"
+      ]
+    }
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "pre-commit": {
+    "enabled": true
+  }
+}

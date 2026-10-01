@@ -1,0 +1,9 @@
+---
+# renovate: datasource=docker depName=cgr.dev/chainguard/static
+defaultBaseImage: cgr.dev/chainguard/static:latest@sha256:324c96273762d9500fd72d973f7d05f0dd15be0668935b3ba02221658041dc9a
+defaultPlatforms:
+  - linux/amd64
+  - linux/arm64
+defaultLdflags:
+  - -s
+  - -w

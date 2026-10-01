@@ -1,0 +1,78 @@
+---
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to increase. The first release is always v0.1.0.
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+permissions:
+  actions: read
+  contents: read
+jobs:
+  tag:
+    name: Create the release tag
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    steps:
+      - name: Check out main with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check that CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh run list --commit "$GITHUB_SHA" --branch main --workflow ci.yaml \
+            --status success --json databaseId --jq length)
+          if [ "$count" -lt 1 ]; then
+            echo "::error::no successful CI run exists for ${GITHUB_SHA}"
+            exit 1
+          fi
+      - name: Compute the next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          current=$(git tag -l 'v*' | sort -V | tail -1)
+          if [ -z "$current" ]; then
+            echo "no release exists yet, the first release is v0.1.0"
+            echo "current=none" >>"$GITHUB_OUTPUT"
+            echo "next=v0.1.0" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          IFS=. read -r major minor patch <<<"${current#v}"
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+            *) echo "::error::unknown bump ${BUMP}"; exit 1 ;;
+          esac
+          echo "current=${current}" >>"$GITHUB_OUTPUT"
+          echo "next=v${major}.${minor}.${patch}" >>"$GITHUB_OUTPUT"
+      - name: Mint a GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Create and push the tag
+        env:
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          CURRENT: ${{ steps.version.outputs.current }}
+          NEXT: ${{ steps.version.outputs.next }}
+          TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+          git tag -a "$NEXT" -m "Release ${NEXT} (previous: ${CURRENT})"
+          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${NEXT}"
+          echo "created ${NEXT}" >>"$GITHUB_STEP_SUMMARY"
