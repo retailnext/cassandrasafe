@@ -201,34 +201,6 @@ create them:
 
 Nobody changes or deletes a published tag.
 
-### Repository settings that protect releases
-
-These settings live in GitHub and are not part of the repository content.
-Apply them once, after the repository exists:
-
-1. Create a GitHub App in the organization, for example
-   `cassandrasafe-release`, with the repository permission `Contents: Read and
-   write`. Install it on this repository only.
-2. Create the environment `release`. Set the deployment branch policy to
-   `main` only, and add at least one required reviewer. Add the variable
-   `RELEASE_APP_ID` and the secret `RELEASE_APP_PRIVATE_KEY`.
-3. Import `.github/rulesets/release-tags.json` under Settings, Rules. Replace
-   the `actor_id` placeholder `0` with the ID of the GitHub App. The app is the
-   only actor that can create, change, or delete a `v*` tag.
-4. Import `.github/rulesets/main-branch.json`. It requires a pull request for
-   every change to `main`, with one approving review from a person or app
-   other than the author, a new approval after each push, and the checks
-   `Lint`, `Go`, and `Smoke tests`.
-5. Under Settings, Actions, set the default `GITHUB_TOKEN` permissions to
-   read-only, and allow GitHub Actions to create pull requests.
-6. Install [Renovate](https://github.com/apps/renovate) and the
-   [Renovate approver bot](https://github.com/apps/renovate-approve) on the
-   repository. The bot approves pull requests that Renovate opens, so they
-   meet the review requirement and merge without a person.
-7. Run the `Release` workflow once to create `v0.1.0`.
-8. After the first release, set the package `cassandrasafe` to public under
-   the organization's Packages.
-
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).

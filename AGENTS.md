@@ -241,9 +241,9 @@ shortest job would fill the cache before the others.
   `e2e/`. Each job loads the artifact and runs `e2e/smoke.sh`. To add a
   Cassandra major version, add a compose file and add the number to the
   matrix.
-- `Smoke tests` is the collector. Branch rules reference the job names
-  `Lint`, `Go`, and `Smoke tests`. When you rename one of these jobs, update
-  `.github/rulesets/main-branch.json`.
+- `Smoke tests` is the collector. The branch ruleset in the repository
+  settings references the job names `Lint`, `Go`, and `Smoke tests`. When you
+  rename one of these jobs, update that ruleset.
 - `Publish the image` runs for `v*` tags only. It never overwrites a tag.
   After the copy to ghcr.io it creates the GitHub Release for the tag.
 
