@@ -27,6 +27,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          # The workflow token must not stay in the git config. It would
+          # override the app token on the push, and the tag ruleset rejects
+          # github-actions[bot].
+          persist-credentials: false
       - name: Check that CI passed for this commit
         env:
           GH_TOKEN: ${{ github.token }}
