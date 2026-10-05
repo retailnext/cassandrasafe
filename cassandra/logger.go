@@ -20,8 +20,11 @@ import (
 	"github.com/apache/cassandra-gocql-driver/v2"
 )
 
-// driverLogger sends the driver's log messages to a slog.Logger, so the
-// driver's warnings appear in the same format as the rest of the output.
+// driverLogger sends the driver's log messages to a slog.Logger at debug
+// level. The driver opens one session for each host in each check, so its
+// messages at every level occur for each host. At a higher level they would
+// make the output grow with the number of hosts. The attribute driver_level
+// keeps the level that the driver gave to the message.
 type driverLogger struct {
 	logger *slog.Logger
 }
@@ -42,20 +45,12 @@ func (l driverLogger) Debug(msg string, fields ...gocql.LogField) {
 	l.emit(slog.LevelDebug, msg, fields)
 }
 
-func (l driverLogger) emit(level slog.Level, msg string, fields []gocql.LogField) {
-	attrs := make([]any, 0, len(fields))
+func (l driverLogger) emit(driverLevel slog.Level, msg string, fields []gocql.LogField) {
+	attrs := make([]any, 0, len(fields)+1)
+	attrs = append(attrs, slog.String(keyDriverLevel, driverLevel.String()))
 	for _, field := range fields {
 		attrs = append(attrs, slog.Attr{Key: field.Name, Value: slog.AnyValue(field.Value.Any())}) //nolint:sloglint // The key names come from the driver.
 	}
 	//nolint:sloglint // The message text comes from the driver.
-	switch level {
-	case slog.LevelError:
-		l.logger.Error(msg, attrs...)
-	case slog.LevelWarn:
-		l.logger.Warn(msg, attrs...)
-	case slog.LevelInfo:
-		l.logger.Info(msg, attrs...)
-	case slog.LevelDebug:
-		l.logger.Debug(msg, attrs...)
-	}
+	l.logger.Debug(msg, attrs...)
 }

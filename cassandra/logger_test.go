@@ -36,13 +36,29 @@ func TestDriverLogger_LevelsAndFields(t *testing.T) {
 
 	out := buf.String()
 	for _, want := range []string{
-		"level=ERROR msg=\"error message\" key=value",
-		"level=WARN msg=\"warning message\" count=3",
-		"level=INFO msg=\"info message\" flag=true",
-		"level=DEBUG msg=\"debug message\"",
+		"level=DEBUG msg=\"error message\" driver_level=ERROR key=value",
+		"level=DEBUG msg=\"warning message\" driver_level=WARN count=3",
+		"level=DEBUG msg=\"info message\" driver_level=INFO flag=true",
+		"level=DEBUG msg=\"debug message\" driver_level=DEBUG",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output does not contain %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestDriverLogger_NoOutputAtInfoLevel(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	l := driverLogger{logger: logger}
+
+	l.Error("error message")
+	l.Warning("warning message")
+	l.Info("info message")
+	l.Debug("debug message")
+
+	if out := buf.String(); out != "" {
+		t.Errorf("driver logger wrote output at info level:\n%s", out)
 	}
 }
