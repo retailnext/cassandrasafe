@@ -13,7 +13,8 @@ The project publishes a container image for `linux/amd64` and `linux/arm64` at
 1. It connects to the node at `--host` and reads `system.local` and
    `system.peers`. It repeats this until the node answers.
 2. It keeps the peers that are in the same datacenter as the node. It drops the
-   peers in other datacenters and logs each one.
+   peers in other datacenters. It logs the number of dropped peers at `info`
+   level, and each dropped peer at `debug` level.
 3. It queries every kept peer at the same time. A peer that answers reports the
    tokens that it owns. The check passes when the reported tokens cover every
    token that `system.peers` lists. A peer that owns no live tokens, such as a
@@ -73,12 +74,19 @@ docker run --rm ghcr.io/retailnext/cassandrasafe:v0.1.0 --host 192.0.2.10
 
 The program writes logs to stderr. On a terminal it writes text. Otherwise it
 writes one JSON object per line. Use `--log-level debug` to see each query
-attempt. At the default level, a line like this one appears every
-`--status-interval` while a peer does not answer:
+attempt and each message from the Cassandra driver. At the default level, a
+line like this one appears every `--status-interval` while a peer does not
+answer:
 
 ```text
 level=INFO msg="waiting for hosts" outstanding_hosts=[192.0.2.20] outstanding_tokens=16
 ```
+
+The number of log lines at the default level does not grow with the number of
+hosts. At that level, the cause of a failure to connect to `--host` appears
+only in the error text of the `waiting for host` line. Sometimes the driver
+gives no cause there, for example after a DNS failure. Then run the program
+again with `--log-level debug`.
 
 ## Supported Cassandra versions
 

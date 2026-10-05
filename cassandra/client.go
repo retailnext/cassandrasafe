@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	keyHost = "host"
+	keyDriverLevel = "driver_level"
+	keyHost        = "host"
 
 	queryLocal = `SELECT bootstrapped, cluster_name, data_center, host_id, partitioner, rack, tokens FROM system.local`
 	queryPeers = `SELECT peer, data_center, host_id, preferred_ip, rack, release_version, rpc_address, schema_version, tokens FROM system.peers`

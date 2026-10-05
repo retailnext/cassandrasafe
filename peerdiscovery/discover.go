@@ -30,6 +30,7 @@ const (
 	keyAttempt         = "attempt"
 	keyError           = "error"
 	keyHost            = "host"
+	keyIgnoredPeers    = "ignored_peers"
 	keyLocal           = "local"
 	keyLocalDatacenter = "local_datacenter"
 	keyPeer            = "peer"
@@ -78,9 +79,11 @@ func (d *Discoverer) Discover(ctx context.Context, host string) (node.TokensByHo
 // selectPeers keeps the peers that share the datacenter of local.
 func selectPeers(ctx context.Context, logger *slog.Logger, local node.Local, peers []node.Peer) node.TokensByHost {
 	result := make(node.TokensByHost, len(peers))
+	ignored := 0
 	for _, peer := range peers {
 		if peer.DataCenter != local.DataCenter {
-			logger.InfoContext(ctx, "ignoring peer in other datacenter",
+			ignored++
+			logger.DebugContext(ctx, "ignoring peer in other datacenter",
 				slog.String(keyLocalDatacenter, local.DataCenter),
 				slog.String(keyPeerDatacenter, peer.DataCenter),
 				slog.String(keyPeer, peer.Address),
@@ -88,6 +91,12 @@ func selectPeers(ctx context.Context, logger *slog.Logger, local node.Local, pee
 			continue
 		}
 		result[peer.Address] = peer.Tokens
+	}
+	if ignored > 0 {
+		logger.InfoContext(ctx, "ignored peers in other datacenters",
+			slog.String(keyLocalDatacenter, local.DataCenter),
+			slog.Int(keyIgnoredPeers, ignored),
+		)
 	}
 	logger.DebugContext(ctx, "got host info", slog.Any(keyLocal, local), slog.Any(keyPeers, peers))
 	return result

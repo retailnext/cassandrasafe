@@ -15,9 +15,11 @@
 package peerdiscovery_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -76,6 +78,61 @@ func TestDiscover_FiltersOtherDatacenters(t *testing.T) {
 	}
 	if _, ok := got["192.0.2.20"]; ok {
 		t.Errorf("peer 192.0.2.20 in another datacenter was kept")
+	}
+}
+
+func TestDiscover_LogsOneLineForIgnoredPeers(t *testing.T) {
+	t.Parallel()
+	local := node.Local{DataCenter: "dc1"}
+	tests := []struct {
+		name        string
+		peers       []node.Peer
+		wantSummary bool
+	}{
+		{
+			name: "peers in another datacenter",
+			peers: []node.Peer{
+				{Address: "192.0.2.10", DataCenter: "dc1", Tokens: []string{"10"}},
+				{Address: "192.0.2.20", DataCenter: "dc2", Tokens: []string{"20"}},
+			},
+			wantSummary: true,
+		},
+		{
+			name: "peers in one datacenter",
+			peers: []node.Peer{
+				{Address: "192.0.2.10", DataCenter: "dc1", Tokens: []string{"10"}},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			d := peerdiscovery.New(logger, &fakeInspector{local: local, peers: tc.peers}, time.Millisecond)
+
+			if _, err := d.Discover(t.Context(), "192.0.2.1"); err != nil {
+				t.Fatalf("Discover returned error: %v", err)
+			}
+
+			out := buf.String()
+			const summary = `msg="ignored peers in other datacenters"`
+			if got := strings.Count(out, summary); tc.wantSummary {
+				if got != 1 {
+					t.Errorf("got %d summary lines, want 1:\n%s", got, out)
+				}
+				for _, want := range []string{"ignored_peers=1", "local_datacenter=dc1"} {
+					if !strings.Contains(out, want) {
+						t.Errorf("output does not contain %q:\n%s", want, out)
+					}
+				}
+			} else if got != 0 {
+				t.Errorf("got %d summary lines, want 0:\n%s", got, out)
+			}
+			if strings.Contains(out, "192.0.2.20") {
+				t.Errorf("output names an ignored peer at info level:\n%s", out)
+			}
+		})
 	}
 }
 
