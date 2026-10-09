@@ -31,7 +31,7 @@ that the node knows.
 
 <!-- renovate: datasource=github-tags depName=retailnext/cassandrasafe -->
 ```bash
-docker run --rm --network container:cassandra ghcr.io/retailnext/cassandrasafe:v0.1.0
+docker run --rm --network container:cassandra ghcr.io/retailnext/cassandrasafe:v0.1.1
 ```
 
 Replace `cassandra` with the name of the Cassandra container. The example
@@ -44,7 +44,7 @@ To check a node from another host, give the address with `--host`:
 
 <!-- renovate: datasource=github-tags depName=retailnext/cassandrasafe -->
 ```bash
-docker run --rm ghcr.io/retailnext/cassandrasafe:v0.1.0 --host 192.0.2.10
+docker run --rm ghcr.io/retailnext/cassandrasafe:v0.1.1 --host 192.0.2.10
 ```
 
 ## Flags
