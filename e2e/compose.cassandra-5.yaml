@@ -4,7 +4,7 @@
 name: cassandrasafe-e2e
 services:
   node1:
-    image: cassandra:5.0.9@sha256:8819d1b7877ee6621751a761cc163332e9c3eaf671c8ef672f7c77a7c5bff05f
+    image: cassandra:5.0.9@sha256:5e996210152ab03e7e4af435ea853a6657954f1d6360ef1283f56cdbd8ad5020
     container_name: cassandrasafe-e2e-node1
     environment:
       CASSANDRA_CLUSTER_NAME: cassandrasafe-e2e
@@ -19,7 +19,7 @@ services:
       retries: 30
       start_period: 90s
   node2:
-    image: cassandra:5.0.9@sha256:8819d1b7877ee6621751a761cc163332e9c3eaf671c8ef672f7c77a7c5bff05f
+    image: cassandra:5.0.9@sha256:5e996210152ab03e7e4af435ea853a6657954f1d6360ef1283f56cdbd8ad5020
     container_name: cassandrasafe-e2e-node2
     environment:
       CASSANDRA_CLUSTER_NAME: cassandrasafe-e2e
